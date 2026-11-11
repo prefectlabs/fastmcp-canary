@@ -10,6 +10,9 @@ deployments:
   - name: cloud-canary-check-release
     version: "{{ $FASTMCP_CANARY_REF }}"
     entrypoint: flows.py:check_release
+    parameters:
+      assessment_flow_id: aee8e5d8-543c-4dcf-9ffd-3cf3a782d15c
+      assessment_version_id: 06af500c-7319-7970-8000-dcb0b3e14653
     concurrency_limit:
       limit: 1
       collision_strategy: ENQUEUE

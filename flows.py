@@ -1,10 +1,12 @@
 from datetime import datetime
 from uuid import UUID
 
-from prefect import flow, task
+from fastmcp.exceptions import ToolError
+from prefect import flow, runtime, task
 from prefect.blocks.system import Secret
 from prefect.client.orchestration import get_client
 
+from assessment import assess_release
 from gateway import FIXTURES, deploy_fixture
 from releases import has_pypi_artifact, published_release, published_releases
 
@@ -18,17 +20,55 @@ def wait_for_artifact(release_id: int) -> dict:
 
 
 @flow(name="fastmcp-canary-check-release", log_prints=True)
-def check_release(release_id: int, organization_id: UUID) -> dict:
+def check_release(
+    release_id: int,
+    organization_id: UUID,
+    assessment_flow_id: UUID,
+    assessment_version_id: UUID,
+    baseline_version: str = "4.1.8",
+) -> dict:
     release = wait_for_artifact(release_id)
-    deploy_token = Secret.load("fastmcp-canary-gateway-deploy").get()
-    probe_token = Secret.load("fastmcp-canary-gateway-probe").get()
+    credentials = {
+        "deploy_token": Secret.load("fastmcp-canary-gateway-deploy").get(),
+        "probe_token": Secret.load("fastmcp-canary-gateway-probe").get(),
+    }
     results = []
     for fixture in FIXTURES:
-        results.append(deploy_fixture(
-            fixture, release["version"], str(organization_id),
-            deploy_token=deploy_token, probe_token=probe_token,
-        ))
-    return {"release": release, "fixtures": results}
+        try:
+            candidate = deploy_fixture(fixture, release["version"], str(organization_id), **credentials)
+        except (AssertionError, ToolError) as first_failure:
+            result = {"fixture": fixture, "candidate": release["version"], "failure": str(first_failure)}
+            if release["version"] != baseline_version:
+                result.update(compare_fixture(
+                    fixture, release["version"], baseline_version, str(organization_id), credentials,
+                ))
+        else:
+            result = {"fixture": fixture, "candidate": candidate}
+        results.append(result)
+
+    evidence = {
+        "release": release,
+        "fixtures": results,
+        "run_url": runtime.flow_run.ui_url,
+        "coverage": "Catalog covers typed tools, validation, resources and prompts. Composition covers a namespaced tool, result middleware and background task completion.",
+    }
+    assessment = assess_release(assessment_flow_id, assessment_version_id, evidence)
+    if any("failure" in result for result in results):
+        raise RuntimeError(f"Canary probe failed. Assessment run {assessment['run_id']}")
+    return {**evidence, "assessment": assessment}
+
+
+def compare_fixture(fixture, candidate_version, baseline_version, organization_id, credentials):
+    try:
+        baseline = deploy_fixture(fixture, baseline_version, organization_id, **credentials)
+    except (AssertionError, ToolError) as error:
+        return {"baseline_version": baseline_version, "baseline_failure": str(error)}
+
+    try:
+        deploy_fixture(fixture, candidate_version, organization_id, **credentials)
+    except (AssertionError, ToolError) as error:
+        return {"baseline": baseline, "candidate_repeat_failure": str(error)}
+    return {"baseline": baseline, "candidate_repeat_passed": True}
 
 
 @flow(name="fastmcp-canary-intake")

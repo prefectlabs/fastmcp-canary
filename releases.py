@@ -30,6 +30,7 @@ def release_record(release):
         "prerelease": release["prerelease"],
         "published_at": release["published_at"],
         "url": release["html_url"],
+        "notes": (release.get("body") or "")[:12000],
     }
 
 
