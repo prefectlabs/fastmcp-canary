@@ -65,11 +65,11 @@ def wait_for(client, path, pending, expected):
     raise TimeoutError(f"{path} did not reach {expected}")
 
 
-def deploy_fixture(fixture, version, organization_id):
+def deploy_fixture(fixture, version, organization_id, *, deploy_token, probe_token):
     archive = fixture_archive(fixture, version)
     checksum = hashlib.sha256(archive).hexdigest()
     with httpx.Client(
-        base_url=API, headers={"Authorization": f"Bearer {os.environ['CANARY_GATEWAY_DEPLOY_TOKEN']}"},
+        base_url=API, headers={"Authorization": f"Bearer {deploy_token}"},
         timeout=60,
     ) as client:
         orgs = {org["slug"]: org["id"] for org in items(client, "/me/organizations")}
@@ -120,7 +120,7 @@ def deploy_fixture(fixture, version, organization_id):
     url = target["servingUrl"].rstrip("/")
     if not url.endswith("/mcp"):
         url += "/mcp"
-    asyncio.run(probe(fixture, version, url))
+    asyncio.run(probe(fixture, version, url, token=probe_token))
     return {"organization_id": organization_id, "project_id": project["id"],
             "deployment_id": deployment["id"], "version": version, "url": url}
 
@@ -131,4 +131,9 @@ if __name__ == "__main__":
     parser.add_argument("version", type=lambda value: str(Version(value)))
     parser.add_argument("--organization-id", required=True)
     args = parser.parse_args()
-    print(json.dumps(deploy_fixture(args.fixture, args.version, args.organization_id)))
+    result = deploy_fixture(
+        args.fixture, args.version, args.organization_id,
+        deploy_token=os.environ["CANARY_GATEWAY_DEPLOY_TOKEN"],
+        probe_token=os.environ["CANARY_GATEWAY_PROBE_TOKEN"],
+    )
+    print(json.dumps(result))

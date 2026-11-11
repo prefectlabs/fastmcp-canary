@@ -1,0 +1,26 @@
+name: fastmcp-canary
+pull:
+  - prefect.deployments.steps.git_clone:
+      id: source
+      repository: https://github.com/prefectlabs/fastmcp-canary.git
+      commit_sha: "{{ $FASTMCP_CANARY_REF }}"
+  - prefect.deployments.steps.set_working_directory:
+      directory: "{{ source.directory }}"
+deployments:
+  - name: cloud-canary-check-release
+    version: "{{ $FASTMCP_CANARY_REF }}"
+    entrypoint: flows.py:check_release
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: managed
+      job_variables:
+        image: prefecthq/prefect:3-python3.12
+        pip_packages:
+          - prefect==3.9.0
+          - fastmcp[tasks]==4.1.8
+          - httpx
+          - packaging
+        compute_profile: small
+        timeout: 4800

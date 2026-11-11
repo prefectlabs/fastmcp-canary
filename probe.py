@@ -35,7 +35,7 @@ async def probe_composition(client):
     assert (await task.result()).data == 21
 
 
-async def main(fixture, expected_version, url):
+async def main(fixture, expected_version, url, *, token=None):
     if url is None:
         if fixture == "catalog":
             from fixtures.catalog.server import mcp
@@ -44,7 +44,7 @@ async def main(fixture, expected_version, url):
         client = Client(mcp)
     else:
         client = Client(
-            url, auth=os.environ["CANARY_GATEWAY_PROBE_TOKEN"],
+            url, auth=token,
         )
 
     async with client:
@@ -64,4 +64,5 @@ if __name__ == "__main__":
     parser.add_argument("version")
     parser.add_argument("--url")
     args = parser.parse_args()
-    asyncio.run(main(args.fixture, args.version, args.url))
+    token = os.environ["CANARY_GATEWAY_PROBE_TOKEN"] if args.url else None
+    asyncio.run(main(args.fixture, args.version, args.url, token=token))
