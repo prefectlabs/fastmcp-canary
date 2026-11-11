@@ -1,0 +1,11 @@
+{% set repository = body.repository.full_name|default('') %}
+{% set release_id = body.release.id|default(0)|int %}
+{% set published = headers.get('x-github-event') == 'release' and body.action == 'published'
+    and repository == 'PrefectHQ/fastmcp' and release_id > 0 %}
+{
+  "event": "fastmcp.canary.github.{{ 'release.published' if published else 'ignored' }}",
+  "resource": {
+    "prefect.resource.id": "github.PrefectHQ/fastmcp.release.{{ release_id }}",
+    "github.release.id": "{{ release_id }}"
+  }
+}
