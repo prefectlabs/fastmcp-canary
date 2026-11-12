@@ -8,6 +8,7 @@ from prefect.client.orchestration import get_client
 
 from assessment import assess_release
 from gateway import FIXTURES, deploy_fixture
+from github_checks import publish_check
 from releases import has_pypi_artifact, published_release, published_releases
 
 
@@ -26,6 +27,7 @@ def check_release(
     assessment_flow_id: UUID,
     assessment_version_id: UUID,
     baseline_version: str = "4.1.8",
+    github_app_id: int | None = None,
 ) -> dict:
     release = wait_for_artifact(release_id)
     credentials = {
@@ -53,9 +55,11 @@ def check_release(
         "coverage": "Catalog covers typed tools, validation, resources and prompts. Composition covers a namespaced tool, result middleware and background task completion.",
     }
     assessment = assess_release(assessment_flow_id, assessment_version_id, evidence)
-    if any("failure" in result for result in results):
+    passed = all("failure" not in result for result in results)
+    check_url = publish_check(github_app_id, evidence, passed) if github_app_id else None
+    if not passed:
         raise RuntimeError(f"Canary probe failed. Assessment run {assessment['run_id']}")
-    return {**evidence, "assessment": assessment}
+    return {**evidence, "assessment": assessment, "github_check": check_url}
 
 
 def compare_fixture(fixture, candidate_version, baseline_version, organization_id, credentials):

@@ -25,6 +25,7 @@ deployments:
           - fastmcp[tasks]==4.1.8
           - httpx
           - packaging
+          - PyJWT[crypto]==2.15.1
         compute_profile: small
         timeout: 4800
   - name: cloud-canary-intake
@@ -42,5 +43,6 @@ deployments:
           - fastmcp[tasks]==4.1.8
           - httpx
           - packaging
+          - PyJWT[crypto]==2.15.1
         compute_profile: small
         timeout: 180
