@@ -74,10 +74,10 @@ def compare_fixture(fixture, candidate_version, baseline_version, organization_i
 @flow(name="fastmcp-canary-intake")
 def intake(
     check_deployment_id: UUID,
-    organization_id: UUID,
     since: datetime,
+    organization_id: UUID | None = None,
     release_id: int | None = None,
-) -> dict[int, str]:
+) -> dict:
     if since.utcoffset() is None:
         raise ValueError("since requires a timezone")
     if release_id is None:
@@ -85,6 +85,9 @@ def intake(
     else:
         release = published_release(release_id)
         releases = [release] if datetime.fromisoformat(release["published_at"]) >= since else []
+
+    if organization_id is None:
+        return {"discovered": [release["id"] for release in releases], "runs": {}}
 
     runs = {}
     with get_client(sync_client=True) as client:
@@ -96,4 +99,4 @@ def intake(
                 idempotency_key=f"fastmcp-canary-release-{release['id']}",
             )
             runs[release["id"]] = str(run.id)
-    return runs
+    return {"discovered": list(runs), "runs": runs}

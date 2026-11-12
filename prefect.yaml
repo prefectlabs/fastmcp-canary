@@ -30,6 +30,9 @@ deployments:
   - name: cloud-canary-intake
     version: "{{ $FASTMCP_CANARY_REF }}"
     entrypoint: flows.py:intake
+    parameters:
+      check_deployment_id: ec215ef3-99b5-49bb-b31e-ede4468a9c45
+      since: "2026-11-10T00:00:00Z"
     work_pool:
       name: managed
       job_variables:
