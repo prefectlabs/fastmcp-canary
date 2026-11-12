@@ -7,6 +7,18 @@ from prefect.artifacts import create_markdown_artifact
 from prefect.client.orchestration import get_client
 
 
+def verified_assessment(result: dict, evidence: dict) -> dict:
+    if result["decision"] != "draft_regression":
+        return result
+    if any(fixture.get("confirmed_repeat") for fixture in evidence["fixtures"]):
+        return result
+    return {
+        "decision": "needs_evidence",
+        "title": "Regression could not be confirmed",
+        "body": "A report requires the same candidate failure twice and a passing baseline.",
+    }
+
+
 def assess_release(flow_id: UUID, version_id: UUID, evidence: dict) -> dict:
     with get_client(sync_client=True) as client:
         plan = f"/flows/{flow_id}/execution-plan"
@@ -41,7 +53,7 @@ def assess_release(flow_id: UUID, version_id: UUID, evidence: dict) -> dict:
                     if response.status_code != 404 and not pending_output:
                         raise
                 else:
-                    result = output["assessment"]
+                    result = verified_assessment(output["assessment"], evidence)
                     break
             sleep(5)
         else:

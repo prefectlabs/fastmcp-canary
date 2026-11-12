@@ -43,10 +43,12 @@ def check_release(
         try:
             candidate = deploy_fixture(fixture, release["version"], str(organization_id), **credentials)
         except (AssertionError, ToolError) as first_failure:
-            result = {"fixture": fixture, "candidate": release["version"], "failure": str(first_failure)}
+            failure = probe_failure(first_failure)
+            result = {"fixture": fixture, "candidate": release["version"], "failure": failure}
             if release["version"] != baseline_version:
                 result.update(compare_fixture(
-                    fixture, release["version"], baseline_version, str(organization_id), credentials,
+                    fixture, release["version"], baseline_version, str(organization_id),
+                    credentials, failure,
                 ))
         else:
             result = {"fixture": fixture, "candidate": candidate}
@@ -66,16 +68,25 @@ def check_release(
     return {**evidence, "assessment": assessment, "github_check": check_url}
 
 
-def compare_fixture(fixture, candidate_version, baseline_version, organization_id, credentials):
+def probe_failure(error):
+    return {"type": type(error).__name__, "detail": str(error)}
+
+
+def compare_fixture(fixture, candidate_version, baseline_version, organization_id, credentials, first_failure):
     try:
         baseline = deploy_fixture(fixture, baseline_version, organization_id, **credentials)
     except (AssertionError, ToolError) as error:
-        return {"baseline_version": baseline_version, "baseline_failure": str(error)}
+        return {"baseline_version": baseline_version, "baseline_failure": probe_failure(error)}
 
     try:
         deploy_fixture(fixture, candidate_version, organization_id, **credentials)
     except (AssertionError, ToolError) as error:
-        return {"baseline": baseline, "candidate_repeat_failure": str(error)}
+        repeat_failure = probe_failure(error)
+        return {
+            "baseline": baseline,
+            "candidate_repeat_failure": repeat_failure,
+            "confirmed_repeat": bool(first_failure["detail"]) and first_failure == repeat_failure,
+        }
     return {"baseline": baseline, "candidate_repeat_passed": True}
 
 
