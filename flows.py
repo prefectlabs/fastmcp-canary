@@ -52,7 +52,7 @@ def check_release(
         "release": release,
         "fixtures": results,
         "run_url": runtime.flow_run.ui_url,
-        "coverage": "Catalog covers typed tools, validation, resources and prompts. Composition covers a namespaced tool, result middleware and shipment results. Background task completion is verified when Gateway advertises the tasks extension.",
+        "coverage": "Catalog covers typed tools, validation, resources, prompts and Annotated dependency injection on supported versions. Composition covers a namespaced tool, result middleware and shipment results. Background task completion is verified when Gateway advertises the tasks extension.",
     }
     assessment = assess_release(assessment_flow_id, assessment_version_id, evidence)
     passed = all("failure" not in result for result in results)

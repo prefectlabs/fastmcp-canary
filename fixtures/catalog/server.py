@@ -1,6 +1,8 @@
 from importlib.metadata import version
+from typing import Annotated
 
 from fastmcp import FastMCP
+from packaging.version import Version
 
 mcp = FastMCP("Canary Catalog")
 CATALOG = {"fern": 7, "ivy": 3}
@@ -26,3 +28,14 @@ def items() -> dict[str, int]:
 @mcp.prompt
 def restock(item: str) -> str:
     return f"Restock {item}."
+
+
+if Version(version("fastmcp")) >= Version("4.2.0a4"):
+    from fastmcp.dependencies import Depends
+
+    def inventory() -> dict[str, int]:
+        return CATALOG
+
+    @mcp.tool
+    def inventory_count(item: str, counts: Annotated[dict[str, int], Depends(inventory)]) -> int:
+        return counts[item]

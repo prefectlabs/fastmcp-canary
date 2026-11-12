@@ -21,7 +21,7 @@ FIXTURES = {"catalog": "fastmcp", "composition": "fastmcp[tasks]"}
 
 
 def fixture_archive(fixture, version):
-    requirements = f"{FIXTURES[fixture]}=={Version(version)}\n".encode()
+    requirements = f"{FIXTURES[fixture]}=={Version(version)}\npackaging\n".encode()
     server = Path(__file__).parent / "fixtures" / fixture / "server.py"
     compressed = io.BytesIO()
     with gzip.GzipFile(fileobj=compressed, mode="wb", mtime=0) as stream:

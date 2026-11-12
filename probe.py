@@ -6,9 +6,10 @@ import os
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from fastmcp_tasks import call_tool_task
+from packaging.version import Version
 
 
-async def probe_catalog(client):
+async def probe_catalog(client, version):
     tools = {tool.name: tool for tool in await client.list_tools()}
     assert tools["stock"].input_schema["properties"]["quantity"]["type"] == "integer"
     assert (await client.call_tool("stock", {"item": "fern", "quantity": 2})).data == 5
@@ -23,6 +24,14 @@ async def probe_catalog(client):
     assert json.loads(resources[0].text) == {"fern": 7, "ivy": 3}
     prompt = await client.get_prompt("restock", {"item": "ivy"})
     assert prompt.messages[0].content.text == "Restock ivy."
+    if Version(version) >= Version("4.2.0a4"):
+        assert "inventory_count" in tools, "the Annotated dependency tool is missing"
+        properties = tools["inventory_count"].input_schema["properties"]
+        assert set(properties) == {"item"}, f"dependency leaked into the tool schema: {properties}"
+        result = await client.call_tool("inventory_count", {"item": "ivy"})
+        assert result.data == 3, f"expected injected inventory count 3, got {result.data}"
+        return {"annotated_dependency": "verified"}
+    return {}
 
 
 async def probe_composition(client, *, gateway):
@@ -57,7 +66,7 @@ async def main(fixture, expected_version, url, *, token=None, gateway=False):
         assert actual == expected_version, f"expected {expected_version}, got {actual}"
         checks = {}
         if fixture == "catalog":
-            await probe_catalog(client)
+            checks = await probe_catalog(client, actual)
         else:
             checks["shipment_execution"] = await probe_composition(client, gateway=gateway)
 
