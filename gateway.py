@@ -120,9 +120,9 @@ def deploy_fixture(fixture, version, organization_id, *, deploy_token, probe_tok
     url = target["servingUrl"].rstrip("/")
     if not url.endswith("/mcp"):
         url += "/mcp"
-    asyncio.run(probe(fixture, version, url, token=probe_token))
+    checks = asyncio.run(probe(fixture, version, url, token=probe_token, gateway=True))
     return {"organization_id": organization_id, "project_id": project["id"],
-            "deployment_id": deployment["id"], "version": version, "url": url}
+            "deployment_id": deployment["id"], "version": version, "url": url, "checks": checks}
 
 
 if __name__ == "__main__":
