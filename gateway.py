@@ -66,8 +66,6 @@ def wait_for(client, path, pending, expected):
 
 
 def deploy_fixture(fixture, version, organization_id, *, deploy_token, probe_token):
-    archive = fixture_archive(fixture, version)
-    checksum = hashlib.sha256(archive).hexdigest()
     with httpx.Client(
         base_url=API, headers={"Authorization": f"Bearer {deploy_token}"},
         timeout=60,
@@ -81,41 +79,49 @@ def deploy_fixture(fixture, version, organization_id, *, deploy_token, probe_tok
         project = next((item for item in items(client, projects) if item["slug"] == slug), None)
         if project is None:
             raise RuntimeError(f"Provision the hosted {slug} project in the canary organization")
-        if (project["organizationId"] != organization_id or project["kind"] != "hosted"
-                or project["authMode"] != "fastmcp-cloud"):
-            raise RuntimeError(f"{slug} must be hosted and protected in the canary organization")
+        return deploy_to_project(client, project, fixture, version, organization_id, probe_token)
 
-        base = f"{projects}/{project['id']}"
-        target = request(client, "GET", f"{base}/targets/by-slug/production")
-        serving = urlparse(target["servingUrl"])
-        if (serving.scheme != "https" or serving.username or not serving.hostname
-                or not serving.hostname.endswith(".fastmcp.app")):
-            raise RuntimeError("Gateway returned an unexpected serving origin")
 
-        upload = request(client, "POST", f"{base}/uploads/url", json={
-            "sizeBytes": len(archive), "checksumSha256": checksum,
-        })["upload"]
-        if urlparse(upload["url"]).scheme != "https":
-            raise RuntimeError("Gateway upload requires HTTPS")
-        try:
-            uploaded = httpx.put(upload["url"], headers=upload["headers"], content=archive, timeout=60)
-        except httpx.RequestError:
-            raise RuntimeError("Gateway archive upload could not reach the storage service") from None
-        if not uploaded.is_success:
-            raise RuntimeError(f"Gateway archive upload returned HTTP {uploaded.status_code}")
+def deploy_to_project(client, project, fixture, version, organization_id, probe_token):
+    archive = fixture_archive(fixture, version)
+    checksum = hashlib.sha256(archive).hexdigest()
+    slug = project["slug"]
+    projects = f"/organizations/{organization_id}/projects"
+    if (project["organizationId"] != organization_id or project["kind"] != "hosted"
+            or project["authMode"] != "fastmcp-cloud"):
+        raise RuntimeError(f"{slug} must be hosted and protected in the canary organization")
 
-        build = request(client, "POST", f"{base}/versions", json={
-            "source": {"kind": "archive", "checksumSha256": checksum},
-            "build": {"entrypoint": "server.py:mcp", "dependencyPath": "requirements.txt"},
-        })
-        wait_for(client, f"{base}/versions/{build['id']}", {"building"}, "ready")
-        deployment = request(client, "POST", f"{base}/deployments", json={
-            "targetId": target["id"], "versionId": build["id"],
-        })
-        wait_for(client, f"{base}/deployments/{deployment['id']}", {"queued", "deploying"}, "succeeded")
-        current = request(client, "GET", f"{base}/targets/by-slug/production")
-        if current["currentDeploymentId"] != deployment["id"]:
-            raise RuntimeError(f"{slug} is serving a different deployment")
+    base = f"{projects}/{project['id']}"
+    target = request(client, "GET", f"{base}/targets/by-slug/production")
+    serving = urlparse(target["servingUrl"])
+    if (serving.scheme != "https" or serving.username or not serving.hostname
+            or not serving.hostname.endswith(".fastmcp.app")):
+        raise RuntimeError("Gateway returned an unexpected serving origin")
+
+    upload = request(client, "POST", f"{base}/uploads/url", json={
+        "sizeBytes": len(archive), "checksumSha256": checksum,
+    })["upload"]
+    if urlparse(upload["url"]).scheme != "https":
+        raise RuntimeError("Gateway upload requires HTTPS")
+    try:
+        uploaded = httpx.put(upload["url"], headers=upload["headers"], content=archive, timeout=60)
+    except httpx.RequestError:
+        raise RuntimeError("Gateway archive upload could not reach the storage service") from None
+    if not uploaded.is_success:
+        raise RuntimeError(f"Gateway archive upload returned HTTP {uploaded.status_code}")
+
+    build = request(client, "POST", f"{base}/versions", json={
+        "source": {"kind": "archive", "checksumSha256": checksum},
+        "build": {"entrypoint": "server.py:mcp", "dependencyPath": "requirements.txt"},
+    })
+    wait_for(client, f"{base}/versions/{build['id']}", {"building"}, "ready")
+    deployment = request(client, "POST", f"{base}/deployments", json={
+        "targetId": target["id"], "versionId": build["id"],
+    })
+    wait_for(client, f"{base}/deployments/{deployment['id']}", {"queued", "deploying"}, "succeeded")
+    current = request(client, "GET", f"{base}/targets/by-slug/production")
+    if current["currentDeploymentId"] != deployment["id"]:
+        raise RuntimeError(f"{slug} is serving a different deployment")
 
     url = target["servingUrl"].rstrip("/")
     if not url.endswith("/mcp"):
@@ -123,7 +129,6 @@ def deploy_fixture(fixture, version, organization_id, *, deploy_token, probe_tok
     checks = asyncio.run(probe(fixture, version, url, token=probe_token, gateway=True))
     return {"organization_id": organization_id, "project_id": project["id"],
             "deployment_id": deployment["id"], "version": version, "url": url, "checks": checks}
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
