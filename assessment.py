@@ -32,7 +32,13 @@ def assess_release(flow_id: UUID, version_id: UUID, evidence: dict) -> dict:
                 try:
                     output = client.request("GET", f"{path}/outputs/result").json()
                 except httpx.HTTPStatusError as error:
-                    if error.response.status_code != 404:
+                    response = error.response
+                    pending_output = (
+                        response.status_code == 409
+                        and response.json().get("reason") == "output_not_available"
+                        and response.json().get("output_status") == "waiting"
+                    )
+                    if response.status_code != 404 and not pending_output:
                         raise
                 else:
                     result = output["assessment"]
