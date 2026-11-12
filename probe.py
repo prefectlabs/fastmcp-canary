@@ -63,7 +63,8 @@ async def main(fixture, expected_version, url, *, token=None, gateway=False):
 
     async with client:
         actual = (await client.call_tool("installed_version", {})).data
-        assert actual == expected_version, f"expected {expected_version}, got {actual}"
+        if actual != expected_version:
+            raise RuntimeError(f"Fixture reported {actual} while probing {expected_version}")
         checks = {}
         if fixture == "catalog":
             checks = await probe_catalog(client, actual)

@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastmcp.exceptions import ToolError
+from packaging.version import Version
 from prefect import flow, runtime, task
 from prefect.blocks.system import Secret
 from prefect.client.orchestration import get_client
@@ -27,9 +28,12 @@ def check_release(
     assessment_flow_id: UUID,
     assessment_version_id: UUID,
     baseline_version: str = "4.1.8",
+    annotated_baseline_version: str = "4.2.0a4",
     github_app_id: int | None = None,
 ) -> dict:
     release = wait_for_artifact(release_id)
+    if Version(release["version"]) >= Version(annotated_baseline_version):
+        baseline_version = annotated_baseline_version
     credentials = {
         "deploy_token": Secret.load("fastmcp-canary-gateway-deploy").get(),
         "probe_token": Secret.load("fastmcp-canary-gateway-probe").get(),
